@@ -6,7 +6,7 @@ import tkinter as tk
 import webbrowser
 
 def open_website():
-    webbrowser.open("https://www.google.com")
+    webbrowser.open("https://docs.google.com/document/d/1Sq1Tl2mWlTnVOQbL2L4zbb2kXI5YssQ73lARfdeWou8/edit?usp=sharing")
 
 def run_project():
     def run_in_thread():
