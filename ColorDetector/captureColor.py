@@ -2,11 +2,32 @@ import cv2
 import math
 import numpy as np
 import mediapipe as mp
-import keyboard
 from colorMatch import get_closest_color, get_broad_color, process_card
+import torchvision.transforms as transforms
+from tensorMatch import match
+import tkinter as tk
 # Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+# PyTorch card detection
+template_path = 'color_correction_card.png'
+template = cv2.imread(template_path, cv2.IMREAD_COLOR)
+template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+card_tensor = transforms.ToTensor()(template_gray).unsqueeze(0)
+
 killStatus = False
 normalizeColor = False
+def fail_pop():
+    global normalizeColor
+    normalizeColor = False
+    popup = tk.Tk()
+    popup.title("Error")
+    popup.geometry("300x100")
+
+    label = tk.Label(popup, text="Error: failed to localize colors, card not detected.\nEnsure card is highlighted prior to localization", font=("Arial", 9))
+    label.pack(pady=20)
+    popup.after(3000, popup.destroy)
+    popup.mainloop()
+
 def killColorCap():
     global killStatus
     killStatus = True
@@ -50,22 +71,25 @@ def runColorCap():
             image = cv2.cvtColor(image_hsv, cv2.COLOR_HSV2BGR)
             image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
             results = hands.process(image_rgb)
-            frame_width = image.shape[1]
-            rect_width = frame_width // 4
-            aspect_ratio = 2.5 / 3.5
-            rect_height = int(rect_width / aspect_ratio)
-
-            top_left = (0, 0)
-            bottom_right = (rect_width, rect_height)
+            # frame_width = image.shape[1]
+            # rect_width = frame_width // 4
+            # aspect_ratio = 2.5 / 3.5
+            # rect_height = int(rect_width / aspect_ratio)
+            top_left, bottom_right = match(image, card_tensor)
+            # top_left = (0, 0)
+            # bottom_right = (rect_width, rect_height)
             cv2.rectangle(image, top_left, bottom_right, (255, 0, 0), thickness=2)
             if normalizeColor == True:
-                blackHSV, whiteBGR = process_card(image, top_left, bottom_right, 20)
-                normalizeColor = False
-                maxBGR = 255
-                rDiff = maxBGR - whiteBGR[2]
-                gDiff = maxBGR - whiteBGR[1]
-                bDiff = maxBGR - whiteBGR[0]
-                blackV = blackHSV[2]
+                if bottom_right != (0,0):
+                    blackHSV, whiteBGR = process_card(image, top_left, bottom_right, 20)
+                    normalizeColor = False
+                    maxBGR = 255
+                    rDiff = maxBGR - whiteBGR[2]
+                    gDiff = maxBGR - whiteBGR[1]
+                    bDiff = maxBGR - whiteBGR[0]
+                    blackV = blackHSV[2]
+                else:
+                    fail_pop()
             if results.multi_hand_landmarks:
                 for hand_landmarks in results.multi_hand_landmarks:
                     tip = hand_landmarks.landmark[mp_hands.HandLandmark.INDEX_FINGER_TIP]
@@ -135,15 +159,10 @@ def runColorCap():
                     cv2.rectangle(image, (0, 50), (50, 100), cv2.cvtColor(np.uint8([[[h, s, v]]]), cv2.COLOR_HSV2BGR)[0][0].astype(int).tolist(), -1)
 
                     cv2.rectangle(image, (0, 100), (50, 150), cv2.cvtColor(np.uint8([[[avgHSV[0], avgHSV[1], avgHSV[2]]]]), cv2.COLOR_HSV2BGR)[0][0].astype(int).tolist(), -1)
-                    print(f"{avgHSV[0]}, {avgHSV[1]}, {avgHSV[2]} | {h}, {s}, {v}")
+                    print(f"{hue}, {saturation}, {value}")
 
                     color_nameHSV = get_broad_color(int(hue), int(saturation), int(value))
-
-                    # color_name, distance = get_closest_color(avgBGR[2], avgBGR[1], avgBGR[0])
                     cv2.putText(image, f"{color_nameHSV}", (x2, y1+50), 0, 1, 0, 3, -1)
-                    # cv2.putText(image, f"Af: {round(r)}, {round(g)}, {round(b)}", (x2, y1+100), 0, 0.5, 0, 2, -1)
-                    # cv2.putText(image, f"Be: {round(r)}, {round(g)}, {round(b)}, + {rDiff}, {gDiff}, {bDiff}", (x2, y1+100), 0, 0.5, 0, 2, -1)
-                    # cv2.putText(image, f"H {round(hue)}, S {round(saturation)}, V {round(value)}", (x2, y1+80), 0, 0.5, 0, 2, -1)
                     cv2.circle(image, (int((x1+x2)/2) , int((y1+y2)/2)), int(extension/2), (0,255,0), 2, -1)
             cv2.namedWindow("Hand Tracking", cv2.WINDOW_NORMAL)
             cv2.imshow('Hand Tracking', image)

@@ -37,6 +37,9 @@ def normalize_color():
     thread.daemon = True
     thread.start()
 
+def fail_normalize():
+    desc_label.config(text="FAILED TO LOCALIZE COLORS (Ensure card is in view and highlighted)", fg="#ffc300")
+
 root = tk.Tk()
 root.title("Color Detection - Advait Gunja")
 root.geometry("600x600")
